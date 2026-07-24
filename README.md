@@ -17,7 +17,7 @@ from antek_geo_core import (
 
 ## Install (both products consume it)
 ```bash
-pip install "git+https://github.com/Nipstar/antek-geo-core@v0.1.0"
+pip install "git+https://github.com/Nipstar/Geo-core@v0.1.0"
 ```
 Pin the tag — bump it to roll changes so upgrades stay deliberate.
 

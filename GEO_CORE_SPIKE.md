@@ -88,7 +88,7 @@ port `competitors.py`, `prompts.py`, `aio.py`, `scoring.py` from geo-prospecting
 expand golden tests to lock outputs.
 
 **Phase 3 — wire geo-prospecting (~half day):**
-add dep (`pip install git+https://github.com/Nipstar/antek-geo-core@v0.1.0`);
+add dep (`pip install git+https://github.com/Nipstar/Geo-core@v0.1.0`);
 replace bodies of `ai_query.py` / `competitor_gate.py` / `prompts.py` / scoring
 with `from antek_geo_core import …`. Keep `probes.py` cache layer, wrap core AIO.
 Run an existing `check mini` on a sample → confirm byte-identical output.
@@ -110,7 +110,7 @@ on a sample → confirm identical output. Delete the duplicated code.
   or keep direct-provider as a slab-only redundancy. Recommend OpenRouter-only.
 
 ## Distribution
-Its own **private repo `Nipstar/antek-geo-core`**, pip-installed by both via a
+Its own **private repo `Nipstar/Geo-core`**, pip-installed by both via a
 pinned git tag (`@v0.1.0`). Bump the tag to roll changes — upgrades stay
 deliberate, no accidental drift.
 
