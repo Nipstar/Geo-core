@@ -26,10 +26,10 @@ antek_geo_core/
   models.py       ✅ CHECK_MODELS, AI_OVERVIEW_ENGINE, country_geo
   providers.py    ✅ query_openrouter_full(prompt, model, api_key=None)  ← canonical sig
   brand.py        ✅ normalize_brand_name, detect_brand_mention, extract_competitors
-  competitors.py  ⏳ port competitor_gate.py
-  prompts.py      ⏳ port normalise_term + build_prompts (field-based primitive)
-  aio.py          ⏳ port SerpApi-first AI Overview probe
-  scoring.py      ⏳ port composite formula
+  competitors.py  ✅ competitor gate (valid_competitors, self-mention, clean_name)
+  prompts.py      ✅ normalise_term + build_prompts (field-based primitive)
+  aio.py          ✅ SerpApi-first AI Overview probe
+  scoring.py      ✅ composite formula
 tests/test_smoke.py  ✅ golden behaviour lock
 ```
 ✅ = built + passing.  ⏳ = documented stub (raises NotImplementedError with source pointer).
@@ -83,7 +83,9 @@ time; the audit displays it + builds the fix on top.
 ## Migration plan
 **Phase 1 — foundation (this spike):** ✅ package + models/providers/brand + tests.
 
-**Phase 2 — finish the core (~half day):**
+**Phase 2 — finish the core:** ✅ DONE — all four ported, 7/7 golden tests pass.
+
+_(original plan)_
 port `competitors.py`, `prompts.py`, `aio.py`, `scoring.py` from geo-prospecting;
 expand golden tests to lock outputs.
 
@@ -110,7 +112,7 @@ on a sample → confirm identical output. Delete the duplicated code.
   or keep direct-provider as a slab-only redundancy. Recommend OpenRouter-only.
 
 ## Distribution
-Its own **private repo `Nipstar/Geo-core`**, pip-installed by both via a
+Its own repo **`Nipstar/Geo-core`** (public for now), pip-installed by both via a
 pinned git tag (`@v0.1.0`). Bump the tag to roll changes — upgrades stay
 deliberate, no accidental drift.
 
