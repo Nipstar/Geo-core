@@ -5,8 +5,11 @@ from antek_geo_core import (
     clean_company_name,
     composite_score,
     country_geo,
+    derive_fuller_name,
     detect_brand_mention,
     extract_competitors,
+    is_brand_query,
+    is_generic_brand_name,
     is_self_mention,
     normalize_brand_name,
     normalise_term,
@@ -61,6 +64,29 @@ def test_build_prompts_parity():
     assert "St. Petersburg, Florida" in a[0]
     sing, plur, countable = normalise_term("solicitors")
     assert countable and plur == "solicitors"
+
+
+def test_is_brand_query():
+    # self-referential query trivially passes on every engine -- excluded
+    # from scored sets so it can't inflate a composite (2026-08-06/07 bug)
+    assert is_brand_query("What is Acme Ltd?", "Acme Ltd") is True
+    assert is_brand_query("Acme Ltd reviews", "Acme Ltd") is True
+    assert is_brand_query("Best marketing agency near me", "Acme Ltd") is False
+    assert is_brand_query("", "Acme Ltd") is False
+
+
+def test_generic_brand_name_handling():
+    # single short word -> flagged generic, near-100% search noise otherwise
+    # (2026-08-08 bug: bare "Regen" reported zero presence anywhere)
+    assert is_generic_brand_name("Regen") is True
+    assert is_generic_brand_name("Antek Automation") is False
+    assert is_generic_brand_name("Nova") is True
+    # domain-derived fuller form: brand+descriptor concatenated in the label
+    assert derive_fuller_name("Regen", "regendigital.co") == "Regen Digital"
+    assert derive_fuller_name("Regen", "www.regendigital.co") == "Regen Digital"
+    # no confident split -> None, never guess
+    assert derive_fuller_name("Regen", "unrelated.com") is None
+    assert derive_fuller_name("Regen", None) is None
 
 
 def test_composite_score():

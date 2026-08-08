@@ -17,6 +17,88 @@ def normalize_brand_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (name or "").lower().strip())
 
 
+# --- Brand-name query handling ----------------------------------------------
+# Both consumer products ran into the same class of bug independently before
+# this was made canonical here:
+#   - geo-prospecting (score.py, 2026-08-06/07): a self-referential scored
+#     query ("What is Acme Ltd?") trivially passes on every AI engine — the
+#     question already contains the answer — so mixing one into a scored
+#     query set inflated a composite from a true 0/100 to a misleading 76/100.
+#   - geo-slab (brand_scanner.py, 2026-08-08): a single short generic-word
+#     brand name (e.g. "Regen") returns near-100% noise from live search,
+#     reporting "zero presence anywhere" when the fuller domain-derived name
+#     ("Regen Digital") finds the business's real profiles immediately.
+# Both are the same root problem — a bare/self-referential brand string
+# doesn't discriminate the way a real discovery query does — so both fixes
+# live together here instead of drifting as two separate implementations.
+
+_SUFFIX_RE = re.compile(r"\b(ltd|limited|llp|plc|inc|co)\b", re.I)
+_PUNCT_RE = re.compile(r"[^a-z0-9 ]")
+
+
+def _core_brand_tokens(name: str) -> str:
+    core = _SUFFIX_RE.sub("", (name or "").lower())
+    core = _PUNCT_RE.sub(" ", core)
+    return re.sub(r"\s+", " ", core).strip()
+
+
+def is_brand_query(query: str, company_name: str) -> bool:
+    """True if the query text itself names the company (e.g. "What is Acme
+    Ltd?", "Acme reviews"). Such queries trivially pass on every AI engine
+    that has ever indexed the company's own site — the question already
+    contains the answer — so callers should exclude these from any scored
+    query set. Still worth probing/displaying for brand-recognition info,
+    just never counted toward a composite or per-engine score.
+
+    Usage (geo-prospecting's score_company()): split queries into scored vs
+    brand before running probes; sum scoring tallies only over the scored
+    set. See antek_geo_core README / geo-prospecting's
+    ai-visibility-check-manual skill for the full pattern."""
+    core = _core_brand_tokens(company_name)
+    if not core:
+        return False
+    return core in (query or "").lower()
+
+
+def is_generic_brand_name(brand: str) -> bool:
+    """True for a single short common-word-shaped brand name (e.g. "Regen",
+    "Nova", "Apex") — the case where a bare live-search query returns
+    near-100% noise and produces a false "no presence anywhere" finding.
+    Callers should also try derive_fuller_name() and compare/merge results
+    rather than trusting the bare-name search alone."""
+    return " " not in brand.strip() and len(brand.strip()) <= 8
+
+
+def derive_fuller_name(brand: str, domain: str | None) -> str | None:
+    """Best-effort: if `brand` is a short single word and `domain`'s first
+    label looks like brand+descriptor concatenated (e.g. brand="Regen",
+    domain="regendigital.co" -> label "regendigital"), split off the
+    remainder and return a fuller candidate name ("Regen Digital"). Not a
+    real word-segmenter — returns None rather than guessing when it can't be
+    confident (remainder isn't alphabetic, or domain doesn't start with the
+    brand at all).
+
+    Callers doing a live brand-mention scan should, when is_generic_brand_name
+    is true and this returns a candidate, run checks for BOTH names and merge
+    per-signal — keep whichever name actually found real presence (see
+    geo-slab's brand_scanner.py for the reference merge implementation).
+    This must not be left as a manual "consider also trying..." step: a
+    stderr nudge that relies on an operator noticing and re-running is
+    exactly the pattern that produced the original bug (regendigital.co,
+    2026-08-08 — bare "Regen" was reported as zero presence anywhere when
+    "Regen Digital" found the real LinkedIn page at position 1)."""
+    if not domain:
+        return None
+    label = re.sub(r"^www\.", "", domain.strip().lower()).split(".")[0]
+    brand_l = re.sub(r"[^a-z0-9]", "", brand.lower())
+    if not brand_l or not label.startswith(brand_l):
+        return None
+    remainder = label[len(brand_l):]
+    if not remainder.isalpha():
+        return None
+    return f"{brand.strip()} {remainder.capitalize()}"
+
+
 def detect_brand_mention(text: str, brand_name: str, url: str = "") -> dict:
     """Regex brand detection. Returns mentioned/count/positions/sentiment."""
     if not text or not brand_name:
