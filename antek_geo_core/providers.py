@@ -17,14 +17,16 @@ import requests
 from . import settings
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 # Real OpenAI model used as the direct fallback for any "openai/*" OpenRouter
 # model id when OpenRouter's upstream provider 400s (e.g. Azure outage,
-# 2026-08). gpt-4o-search-preview has search built in natively, so it needs
-# no separate web-search plugin/tool wiring to match the live-grounded
-# behaviour the OpenRouter "web" plugin gives everything else.
-OPENAI_FALLBACK_MODEL = "gpt-4o-search-preview"
+# 2026-08). Same 5.2 generation as OpenRouter's "openai/gpt-5.2-chat" — the
+# "-chat" chat-completions variant is deprecated direct-from-OpenAI on some
+# accounts, but the base "gpt-5.2" model works via the Responses API with
+# the web_search_preview tool attached, giving genuine live-grounded search
+# (not a downgrade substitute like gpt-4o-search-preview).
+OPENAI_FALLBACK_MODEL = "gpt-5.2"
 
 
 def _payload(model: str, prompt: str) -> dict:
@@ -44,31 +46,41 @@ def _payload(model: str, prompt: str) -> dict:
 
 
 def _query_openai_direct(prompt: str) -> Optional[dict]:
-    """Direct OpenAI call, bypassing OpenRouter entirely. Only used as a
-    fallback (see query_openrouter_full) — no cost/usage accounting from
-    OpenRouter here, so cost_usd is left at 0.0 and must be estimated
-    upstream if needed."""
+    """Direct OpenAI call via the Responses API, bypassing OpenRouter
+    entirely. Only used as a fallback (see query_openrouter_full) — no
+    cost/usage accounting from OpenRouter here, so cost_usd is left at 0.0
+    and must be estimated upstream if needed."""
     if not settings.OPENAI_API_KEY:
         return None
     try:
         resp = requests.post(
-            OPENAI_URL,
+            OPENAI_RESPONSES_URL,
             headers={
                 "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
                 "Content-Type": "application/json",
             },
             json={
                 "model": OPENAI_FALLBACK_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
+                "input": prompt,
+                "tools": [{"type": "web_search_preview"}],
             },
-            timeout=60,
+            timeout=90,
         )
         resp.raise_for_status()
         data = resp.json()
+        text = ""
+        for item in data.get("output") or []:
+            if item.get("type") == "message":
+                for c in item.get("content") or []:
+                    if c.get("type") == "output_text":
+                        text += c.get("text", "")
+        if not text:
+            raise ValueError("no message output in Responses API result")
+        usage = data.get("usage") or {}
         return {
-            "text": data["choices"][0]["message"]["content"],
+            "text": text,
             "cost_usd": 0.0,
-            "tokens": (data.get("usage") or {}).get("total_tokens", 0),
+            "tokens": usage.get("total_tokens", 0),
         }
     except Exception as exc:  # noqa: BLE001
         print(f"[OpenAI-direct/{OPENAI_FALLBACK_MODEL}] error: {exc}", file=sys.stderr)
