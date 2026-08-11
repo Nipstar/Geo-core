@@ -7,7 +7,9 @@ geo-prospecting's (the newer superset).
 Modules:
     settings    — env-driven config (no repo coupling)
     models      — CHECK_MODELS (canonical 5 engines), AI_OVERVIEW_ENGINE, country_geo
-    providers   — query_openrouter_full(prompt, model, api_key=None)
+    providers   — query_openrouter_full(prompt, model, api_key=None); auto-falls
+                  back to direct OpenAI (OPENAI_API_KEY) for openai/* models if
+                  OpenRouter's upstream provider errors
     brand       — normalize_brand_name, detect_brand_mention, extract_competitors,
                   is_brand_query, is_generic_brand_name, derive_fuller_name
     competitors — competitor gate: valid_competitors, is_self_mention, clean_company_name…
@@ -45,7 +47,7 @@ from .prompts import build_prompts, normalise_term
 from .providers import query_openrouter_full
 from .scoring import composite_score
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "aio", "brand", "competitors", "models", "prompts", "providers", "scoring", "settings",

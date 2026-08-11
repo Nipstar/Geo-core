@@ -16,6 +16,13 @@ def _bool(v: str) -> bool:
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 
+# Direct-OpenAI fallback for the ChatGPT engine only, used automatically when
+# OpenRouter's upstream provider (Azure, as of 2026-08) 400s regardless of
+# payload — a provider-side outage, not a request problem, so retrying the
+# same OpenRouter call never helps. Optional: if unset, ChatGPT probes just
+# fail as before (existing behaviour, no regression).
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
 # Attach OpenRouter's web plugin so chat models answer from live search
 # (matches real ChatGPT/Gemini behaviour). Toggle GEO_WEB_SEARCH=0 to disable.
 WEB_SEARCH = _bool(os.getenv("GEO_WEB_SEARCH", "1"))

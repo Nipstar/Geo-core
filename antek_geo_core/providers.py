@@ -17,6 +17,14 @@ import requests
 from . import settings
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+
+# Real OpenAI model used as the direct fallback for any "openai/*" OpenRouter
+# model id when OpenRouter's upstream provider 400s (e.g. Azure outage,
+# 2026-08). gpt-4o-search-preview has search built in natively, so it needs
+# no separate web-search plugin/tool wiring to match the live-grounded
+# behaviour the OpenRouter "web" plugin gives everything else.
+OPENAI_FALLBACK_MODEL = "gpt-4o-search-preview"
 
 
 def _payload(model: str, prompt: str) -> dict:
@@ -35,9 +43,51 @@ def _payload(model: str, prompt: str) -> dict:
     return body
 
 
+def _query_openai_direct(prompt: str) -> Optional[dict]:
+    """Direct OpenAI call, bypassing OpenRouter entirely. Only used as a
+    fallback (see query_openrouter_full) — no cost/usage accounting from
+    OpenRouter here, so cost_usd is left at 0.0 and must be estimated
+    upstream if needed."""
+    if not settings.OPENAI_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            OPENAI_URL,
+            headers={
+                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": OPENAI_FALLBACK_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "text": data["choices"][0]["message"]["content"],
+            "cost_usd": 0.0,
+            "tokens": (data.get("usage") or {}).get("total_tokens", 0),
+        }
+    except Exception as exc:  # noqa: BLE001
+        print(f"[OpenAI-direct/{OPENAI_FALLBACK_MODEL}] error: {exc}", file=sys.stderr)
+        return None
+
+
 def query_openrouter_full(prompt: str, model: str, api_key: str | None = None) -> Optional[dict]:
     """Call OpenRouter with usage accounting. Returns {text, cost_usd, tokens}
-    or None on error."""
+    or None on error.
+
+    Automatic fallback: if the model is an "openai/*" OpenRouter id and the
+    OpenRouter call fails (e.g. an upstream provider outage — confirmed
+    2026-08 as an Azure "BadRequestForDependentService" that persisted across
+    retries and payload variants, not a request problem), retries once via a
+    direct OpenAI call (see _query_openai_direct) rather than silently
+    returning None. Requires OPENAI_API_KEY; if unset, behaves exactly as
+    before (no regression) — this must be automatic, not a manual re-run,
+    per standing policy that visibility-scan failures can't rely on someone
+    noticing and intervening by hand."""
     api_key = api_key or settings.OPENROUTER_API_KEY
     if not api_key:
         raise RuntimeError("OPENROUTER_API_KEY is not set.")
@@ -63,4 +113,8 @@ def query_openrouter_full(prompt: str, model: str, api_key: str | None = None) -
         }
     except Exception as exc:  # noqa: BLE001
         print(f"[OpenRouter/{model}] error: {exc}", file=sys.stderr)
+        if model.lower().startswith("openai/") and settings.OPENAI_API_KEY:
+            print(f"[OpenRouter/{model}] falling back to direct OpenAI "
+                  f"({OPENAI_FALLBACK_MODEL})", file=sys.stderr)
+            return _query_openai_direct(prompt)
         return None
