@@ -100,5 +100,7 @@ def test_composite_score():
     s = composite_score(grid, engines, queries)
     assert s["platforms_tested"] == 2 and s["platforms_mentioned"] == 1
     assert s["prompts_total"] == 4 and s["prompts_mentioned"] == 1
-    # (1/2)*70 + (1/4)*30 = 35 + 7.5 = 42.5
-    assert s["composite"] == 42.5
+    # Pure recommendation rate (DEPTH_WEIGHT=1.0, BREADTH_WEIGHT=0.0):
+    # cell_rate = prompts_mentioned/prompts_total = 1/4 -> 100*0.25 = 25.0.
+    # Binary breadth (1/2 engines) is reported, never folded into the headline.
+    assert s["composite"] == 25.0
