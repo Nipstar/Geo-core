@@ -35,13 +35,23 @@ def _payload(model: str, prompt: str) -> dict:
     body = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1000,
+        "max_tokens": 4000,  # bumped 2026-08-24: reasoning models (gpt-5.2) burn hidden reasoning tokens against this cap, leaving 0 for actual answer content -> silent None text
         "temperature": 0.7,
         "usage": {"include": True},
     }
     m = model.lower()
     if settings.WEB_SEARCH and "perplexity" not in m and "sonar" not in m:
         body["plugins"] = [{"id": "web", "max_results": settings.WEB_SEARCH_MAX_RESULTS}]
+    # Cap reasoning effort on reasoning-capable OpenAI models (gpt-5.x family).
+    # Without this, gpt-5.2's hidden reasoning tokens can run open-ended,
+    # burning ~40k tokens/~$0.16 per query and competing with max_tokens for
+    # room to actually answer (see the max_tokens bump above). "low" keeps it
+    # a genuine reasoning+web-grounded answer — representative of what a
+    # consumer sees, since ChatGPT doesn't run max reasoning by default
+    # either — while keeping cost/latency/starvation risk down. Confirmed
+    # 2026-08-24 via Andy.
+    if m.startswith("openai/gpt-5"):
+        body["reasoning"] = {"effort": "low"}
     return body
 
 
@@ -113,7 +123,7 @@ def query_openrouter_full(prompt: str, model: str, api_key: str | None = None) -
                 "X-Title": settings.X_TITLE,
             },
             json=_payload(model, prompt),
-            timeout=60,
+            timeout=120,  # bumped 2026-08-24: gpt-5.2 reasoning+websearch can run 20-40s+
         )
         resp.raise_for_status()
         data = resp.json()

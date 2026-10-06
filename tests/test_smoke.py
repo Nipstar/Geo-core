@@ -104,3 +104,27 @@ def test_composite_score():
     # cell_rate = prompts_mentioned/prompts_total = 1/4 -> 100*0.25 = 25.0.
     # Binary breadth (1/2 engines) is reported, never folded into the headline.
     assert s["composite"] == 25.0
+
+
+def test_composite_from_counts_matches_grid():
+    from antek_geo_core.scoring import composite_from_counts
+    engines = ["ChatGPT", "Claude", "Gemini"]
+    queries = ["q1", "q2"]
+    grid = {
+        "ChatGPT": {"q1": True, "q2": False},
+        "Claude": {"q1": False, "q2": False},
+        "Gemini": {"q1": None, "q2": None},
+    }
+    from_grid = composite_score(grid, engines, queries)
+    from_counts = composite_from_counts(
+        from_grid["platforms_tested"], from_grid["platforms_mentioned"],
+        from_grid["prompts_total"], from_grid["prompts_mentioned"],
+    )
+    assert from_counts["composite"] == from_grid["composite"] == 25.0
+
+
+def test_composite_from_counts_zero_tested_raises():
+    import pytest
+    from antek_geo_core.scoring import composite_from_counts
+    with pytest.raises(ValueError):
+        composite_from_counts(0, 0, 0, 0)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 # The four chat engines probed for the free visibility check.
 CHECK_MODELS: dict[str, str] = {
-    "ChatGPT": "openai/gpt-5.2-chat",
+    "ChatGPT": "openai/gpt-chat-latest",
     "Claude": "anthropic/claude-sonnet-5",
     "Gemini": "google/gemini-2.5-flash",
     "Perplexity": "perplexity/sonar",

@@ -47,7 +47,7 @@ from .prompts import build_prompts, normalise_term
 from .providers import query_openrouter_full
 from .scoring import composite_score
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 __all__ = [
     "aio", "brand", "competitors", "models", "prompts", "providers", "scoring", "settings",
